@@ -397,7 +397,7 @@ gpgcheck=0
 
       it "downgrade on a local file with allow_downgrade true works" do
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
-        yum_package.version "1.2-1" 
+        yum_package.version "1.2-1"
         yum_package.allow_downgrade true
         yum_package.package_name("#{CHEF_SPEC_ASSETS}/yumrepo/chef_rpm-1.2-1.fc24.x86_64.rpm")
         yum_package.run_action(:install)
