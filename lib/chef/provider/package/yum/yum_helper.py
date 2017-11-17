@@ -88,7 +88,19 @@ def query(command):
     else:
         obj = base.pkgSack
 
-    if do_nevra:
+    # if we are given "name == 1.2.3" then we must use the getProvides() API.
+    #   - this means that we ignore arch and version properties when given prco tuples as a package_name
+    #   - in order to fix this, something would have to happen where getProvides was called first and
+    #     then the result was searchNevra'd.  please be extremely careful if attempting to fix that
+    #     since searchNevra does not support prco tuples.
+    if any(elem in command['provides'] for elem in r"<=>"):
+        # handles flags (<, >, =, etc) and versions, but no wildcareds 
+        pkgs = obj.getProvides(*yum.misc.string_to_prco_tuple(command['provides']))
+    elif do_nevra:
+        # now if we're given version or arch properties explicitly, then we do a SearchNevra.
+        #  - this means that wildcard version in the package_name with an arch property will not work correctly
+        #  - again don't try to fix this just by pushing bugs around in the code, you would need to call
+        #    returnPackages and searchProvides and then apply the Nevra filters to those results.
         pkgs = obj.searchNevra(**args)
         if (command['action'] == "whatinstalled") and (not pkgs):
           pkgs = obj.searchNevra(name=args['name'], arch=desired_arch)
@@ -99,11 +111,6 @@ def query(command):
         if not pkgs:
             # handles wildcards
             pkgs = obj.searchProvides(command['provides'])
-
-        if not pkgs:
-            if any(elem in command['provides'] for elem in r"<=>"):
-                # handles flags (<, >, =, etc) and versions, but no wildcareds 
-                pkgs = obj.getProvides(*command['provides'].split())
 
     if not pkgs:
         outpipe.write('{0} nil nil\n'.format(command['provides'].split().pop(0)))

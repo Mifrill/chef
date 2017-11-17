@@ -172,13 +172,14 @@ gpgcheck=0
         expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64")
       end
 
-      it "downgrades when the installed version does not match the version string" do
-        # FIXME? shouldn't this throw an exception?  shouldn't this with allow_downgrade do the downgrade?
+      it "downgrades when the installed version is higher than the package_name version" do
+        pending "this doesn't work"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm-1.2")
         yum_package.run_action(:install)
         expect(yum_package.updated_by_last_action?).to be true
-        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64")
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
       end
     end
 
@@ -334,6 +335,22 @@ gpgcheck=0
         expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
       end
 
+      it "with an equality constraint, when it is not met by an installed rpm, it upgrades" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm = 1.10")
+        yum_package.run_action(:install)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with an equality constraint, when it is met by an installed rpm, it does nothing" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm = 1.2")
+        yum_package.run_action(:install)
+        expect(yum_package.updated_by_last_action?).to be false
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
       it "when it is met by an installed rpm, it does nothing" do
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.package_name("chef_rpm > 1.2")
@@ -352,6 +369,34 @@ gpgcheck=0
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.package_name("chef_rpm > 2.0")
         expect { yum_package.run_action(:install) }.to raise_error(Chef::Exceptions::Package, /No candidate version available/)
+      end
+
+      it "with a less than constraint, when nothing is installed, it installs" do
+        flush_cache
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm < 1.10")
+        yum_package.run_action(:install)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a less than constraint, when the install version matches, it does nothing" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm < 1.10")
+        yum_package.run_action(:install)
+        expect(yum_package.updated_by_last_action?).to be false
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a less than constraint, when the install version fails, it should downgrade" do
+        pending "this doesn't work"
+        preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm < 1.10")
+        yum_package.run_action(:install)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
       end
     end
 
@@ -550,7 +595,8 @@ gpgcheck=0
         flush_cache
         # this is a bit tricky -- we need this action to be idempotent, so that it doesn't recycle any
         # caches, but need it to hit whatavailable with the repo disabled.  using :upgrade like this
-        # accomplishes both those goals.
+        # accomplishes both those goals (it would be easier if we had other rpms in this repo, but with
+        # one rpm we neeed to do this).
         preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
         yum_package.options("--disablerepo=chef-yum-localtesting")
         yum_package.run_action(:upgrade)
@@ -628,6 +674,94 @@ gpgcheck=0
         FileUtils.rm_f "/etc/yum.repos.d/chef-yum-localtesting.repo"
         flush_cache
         yum_package.package_name("#{CHEF_SPEC_ASSETS}/yumrepo/chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+    end
+
+    context "version pinning" do
+      it "with an equality pin in the name it upgrades a prior package" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm-1.10")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with a prco equality pin in the name it upgrades a prior package" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm == 1.10")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with an equality pin in the name it downgrades a later package" do
+        pending "this is broken"
+        preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm-1.2")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a prco equality pin in the name it downgrades a later package" do
+        pending "this is broken"
+        preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm == 1.2")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a > pin in the name and no rpm installed it installs" do
+        flush_cache
+        yum_package.package_name("chef_rpm > 1.2")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with a < pin in the name and no rpm installed it installs" do
+        flush_cache
+        yum_package.package_name("chef_rpm < 1.10")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a > pin in the name and matching rpm installed it does nothing" do
+        preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm > 1.2")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be false
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with a < pin in the name and no rpm installed it installs" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm < 1.10")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be false
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
+      end
+
+      it "with a > pin in the name and non-matching rpm installed it upgrades" do
+        preinstall("chef_rpm-1.2-1.fc24.x86_64.rpm")
+        yum_package.package_name("chef_rpm > 1.2")
+        yum_package.run_action(:upgrade)
+        expect(yum_package.updated_by_last_action?).to be true
+        expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.10-1.fc24.x86_64$")
+      end
+
+      it "with a < pin in the name and non-matching rpm installed it downgrades" do
+        pending "broken"
+        preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
+        yum_package.allow_downgrade true
+        yum_package.package_name("chef_rpm < 1.10")
         yum_package.run_action(:upgrade)
         expect(yum_package.updated_by_last_action?).to be true
         expect(shell_out("rpm -q chef_rpm").stdout.chomp).to match("^chef_rpm-1.2-1.fc24.x86_64$")
