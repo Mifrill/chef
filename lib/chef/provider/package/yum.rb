@@ -93,21 +93,24 @@ class Chef
         def install_package(names, versions)
           method = nil
           methods = []
-          names.zip(current_version_array, candidate_version_array) do |n, cv, v, a|
-
+          names.each_with_index do |n, i|
             next if n.nil?
+
+            av = available_version(i)
+
+            name = av.name  # resolve the name via the available/candidate version
+
+            iv = python_helper.package_query(:whatinstalled, name)
 
             method = "install"
 
             # If this is a package like the kernel that can be installed multiple times, we'll skip over this logic
-            if version_gt?(cv, v) && !python_helper.install_only_packages(n)
+            if new_resource.allow_downgrade && version_gt?(iv.version_with_arch, av.version_with_arch) && !python_helper.install_only_packages(name)
               # We allow downgrading only in the evenit of single-package
               # rules where the user explicitly allowed it
-              method = "downgrade" if new_resource.allow_downgrade
+              method = "downgrade"
             end
 
-            # methods don't count for packages we won't be touching
-            next if version_equals?(cv, v)
             methods << method
           end
 

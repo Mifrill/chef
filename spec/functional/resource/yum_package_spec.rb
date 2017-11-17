@@ -173,7 +173,6 @@ gpgcheck=0
       end
 
       it "downgrades when the installed version is higher than the package_name version" do
-        pending "this doesn't work"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm-1.2")
@@ -390,7 +389,6 @@ gpgcheck=0
       end
 
       it "with a less than constraint, when the install version fails, it should downgrade" do
-        pending "this doesn't work"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm < 1.10")
@@ -698,7 +696,6 @@ gpgcheck=0
       end
 
       it "with an equality pin in the name it downgrades a later package" do
-        pending "this is broken"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm-1.2")
@@ -708,7 +705,6 @@ gpgcheck=0
       end
 
       it "with a prco equality pin in the name it downgrades a later package" do
-        pending "this is broken"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm == 1.2")
@@ -758,7 +754,6 @@ gpgcheck=0
       end
 
       it "with a < pin in the name and non-matching rpm installed it downgrades" do
-        pending "broken"
         preinstall("chef_rpm-1.10-1.fc24.x86_64.rpm")
         yum_package.allow_downgrade true
         yum_package.package_name("chef_rpm < 1.10")
